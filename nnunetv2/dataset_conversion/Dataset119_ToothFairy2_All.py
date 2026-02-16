@@ -177,9 +177,9 @@ if __name__ == "__main__":
     # Dataset 120: Only Teeth + Jaw Classes
     # Dataset 121: Only Teeth Classes
 
-    root = "/media/l727r/data/Teeth_Data/ToothFairy2_Dataset"
+    root = "data/nnUNet_raw"
 
-    process_ds(root, "Dataset112_ToothFairy2", "Dataset119_ToothFairy2_All", mapping_DS119(), None)
+    process_ds(root, "Dataset112_ToothFairy2", "Dataset113_ToothFairy2", mapping_DS119(), None)
     # process_ds(
     #     root,
     #     "Dataset112_ToothFairy2",

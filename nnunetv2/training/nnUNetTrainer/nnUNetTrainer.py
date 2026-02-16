@@ -48,6 +48,7 @@ from nnunetv2.evaluation.evaluate_predictions import compute_metrics_on_folder
 from nnunetv2.inference.export_prediction import export_prediction_from_logits, resample_and_save
 from nnunetv2.inference.predict_from_raw_data import nnUNetPredictor
 from nnunetv2.inference.sliding_window_prediction import compute_gaussian
+from nnunetv2.nets import MedNeXt, SwinUNETR
 from nnunetv2.paths import nnUNet_preprocessed, nnUNet_results
 from nnunetv2.training.data_augmentation.compute_initial_patch_size import get_patch_size
 from nnunetv2.training.dataloading.nnunet_dataset import infer_dataset_class
@@ -898,7 +899,12 @@ class nnUNetTrainer(object):
         if isinstance(mod, OptimizedModule):
             mod = mod._orig_mod
 
-        mod.decoder.deep_supervision = enabled
+        if isinstance(mod, MedNeXt):
+            mod.deep_supervision = enabled
+        elif isinstance(mod, SwinUNETR):
+            assert not enabled
+        else:
+            mod.decoder.deep_supervision = enabled
 
     def on_train_start(self):
         if not self.was_initialized:

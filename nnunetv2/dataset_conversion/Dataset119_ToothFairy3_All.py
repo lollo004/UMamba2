@@ -295,7 +295,7 @@ def process_ds(
     lbl_dir_in = join(root, input_ds)
     lbl_dir_out = join(root, output_ds)
 
-    process_labels(lbl_files, lbl_dir_in, lbl_dir_out, mapping, n_processes=16)
+    process_labels(lbl_files, lbl_dir_in, lbl_dir_out, mapping, n_processes=8)
 
     # --- Generate dataset.json --- #
     dataset = {}
@@ -336,7 +336,7 @@ def process_ds(
 
 if __name__ == "__main__":
     root = "/home/zhiqin/datasets/CBCT/ToothFairy3"
-    print(mapping_DS119())
+    print(mapping_DS119_nocanal_nopulp())
     # print({v: k for k, v in mapping_DS119_nocanal().items()})
-    process_ds(root, "labelsTrRaw", "labelsTr",
-               mapping_DS119(), "mapped_dataset.json")
+    process_ds(root, "labelsTrRaw", "labelsTr_nocanal_nopulp",
+               mapping_DS119_nocanal_nopulp(), "mapped_nocanal_nopulp_dataset.json")
