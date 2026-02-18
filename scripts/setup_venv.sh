@@ -9,6 +9,7 @@ cd /workspace/pulpy/code/Umamba2
 
 uv pip install -e .
 uv pip install wheel
+uv pip install setuptools
 uv pip install causal-conv1d==1.5.2 mamba-ssm==2.2.5 --no-build-isolation
 
 uv pip install -U "transformers==4.47.1"
