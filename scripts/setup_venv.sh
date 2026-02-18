@@ -3,7 +3,7 @@ cd /workspace/pulpy
 uv venv
 source .venv/bin/activate
 
-pip3 install --pre torch torchvision --index-url https://download.pytorch.org/whl/nightly/cu128
+uv pip install torch torchvision --index-url https://download.pytorch.org/whl/cu126
 
 cd /workspace/pulpy/code/Umamba2
 
