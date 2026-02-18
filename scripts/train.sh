@@ -11,6 +11,6 @@ ln -s /workspace/pulpy/data/nnUNet_preprocessed/Dataset005_Pulpy3D_Pulp/3d_fullr
 # CUDA_VISIBLE_DEVICES=0 nnUNetv2_train 5 3d_fullres_torchres_ps160x320x320_bs1 all -p nnUNetResEncUNetLPlans_torchres -tr nnUNetTrainer_Pulpy_accum2
 # CUDA_VISIBLE_DEVICES=1 nnUNetv2_train 5 3d_fullres_torchres_ps160x320x320_bs1_a all -p nnUNetResEncUNetLPlans_torchres -tr nnUNetTrainer_Pulpy_accum2
 # CUDA_VISIBLE_DEVICES=2 nnUNetv2_train 5 3d_fullres_torchres_ps160x320x320_bs1_b all -p nnUNetResEncUNetLPlans_torchres -tr nnUNetTrainer_Pulpy_accum2
-CUDA_VISIBLE_DEVICES=3 nnUNetv2_train 5 3d_fullres_torchres_mambabot_ps160x320x320_bs1 all -p nnUNetResEncUNetLPlans_torchres -tr nnUNetTrainer_Pulpy_accum2
-# CUDA_VISIBLE_DEVICES=4 nnUNetv2_train 5 3d_fullres_torchres_mambabot_ps160x320x320_bs1_a all -p nnUNetResEncUNetLPlans_torchres -tr nnUNetTrainer_Pulpy_accum2
+# CUDA_VISIBLE_DEVICES=0 nnUNetv2_train 5 3d_fullres_torchres_mambabot_ps160x320x320_bs1 all -p nnUNetResEncUNetLPlans_torchres -tr nnUNetTrainer_Pulpy_accum2
+CUDA_VISIBLE_DEVICES=0 nnUNetv2_train 5 3d_fullres_torchres_mambabot_ps160x320x320_bs1_a all -p nnUNetResEncUNetLPlans_torchres -tr nnUNetTrainer_Pulpy_accum2
 # CUDA_VISIBLE_DEVICES=5 nnUNetv2_train 5 3d_fullres_torchres_mambabot_ps160x320x320_bs1_b all -p nnUNetResEncUNetLPlans_torchres -tr nnUNetTrainer_Pulpy_accum2
