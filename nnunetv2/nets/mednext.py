@@ -274,11 +274,11 @@ class MedNeXt(AbstractDynamicNetworkArchitectures):
         # Used to fix PyTorch checkpointing bug
         self.dummy_tensor = nn.Parameter(torch.tensor([1.]), requires_grad=True)
 
-        if deep_supervision:
-            self.out_1 = OutBlock(in_channels=n_channels * 2, n_classes=num_classes, dim=dim)
-            self.out_2 = OutBlock(in_channels=n_channels * 4, n_classes=num_classes, dim=dim)
-            self.out_3 = OutBlock(in_channels=n_channels * 8, n_classes=num_classes, dim=dim)
-            self.out_4 = OutBlock(in_channels=n_channels * 16, n_classes=num_classes, dim=dim)
+        # if deep_supervision:
+        self.out_1 = OutBlock(in_channels=n_channels * 2, n_classes=num_classes, dim=dim)
+        self.out_2 = OutBlock(in_channels=n_channels * 4, n_classes=num_classes, dim=dim)
+        self.out_3 = OutBlock(in_channels=n_channels * 8, n_classes=num_classes, dim=dim)
+        self.out_4 = OutBlock(in_channels=n_channels * 16, n_classes=num_classes, dim=dim)
 
         self.block_counts = block_counts
 
