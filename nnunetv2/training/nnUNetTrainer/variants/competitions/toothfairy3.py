@@ -26,17 +26,21 @@ from batchgeneratorsv2.transforms.utils.random import RandomTransform
 from batchgeneratorsv2.transforms.utils.remove_label import RemoveLabelTansform
 from batchgeneratorsv2.transforms.utils.seg_to_regions import ConvertSegmentationToRegionsTransform
 from torch import autocast
+from torch.nn.parallel import DistributedDataParallel as DDP
 
 from nnunetv2.training.dataloading.data_loader import nnUNetDataLoaderWithClick
 from nnunetv2.training.dataloading.nnunet_dataset import infer_dataset_class
 from nnunetv2.training.loss.compound_losses import DC_and_CE_loss, DC_and_CE_smooth_loss
 from nnunetv2.training.loss.deep_supervision import DeepSupervisionWrapper
 from nnunetv2.training.loss.dice import MemoryEfficientSoftDiceLoss, get_tp_fp_fn_tn
+from nnunetv2.training.lr_scheduler.warmup import PolyLRScheduler_offset, Lin_incr_LRScheduler
 from nnunetv2.training.nnUNetTrainer.nnUNetTrainer import nnUNetTrainer
 from nnunetv2.training.nnUNetTrainer.variants.data_augmentation.nnUNetTrainerNoMirroring import nnUNetTrainer_onlyMirror01
 from nnunetv2.training.nnUNetTrainer.variants.loss.nnUNetTrainerDiceLoss import nnUNetTrainerDiceCELoss_noSmooth
+from nnunetv2.training.nnUNetTrainer.variants.lr_schedule.nnUNetTrainer_warmup import nnUNetTrainer_warmup
 from nnunetv2.utilities.default_n_proc_DA import get_allowed_n_proc_DA
-from nnunetv2.utilities.helpers import dummy_context
+from nnunetv2.utilities.get_network_from_plans import get_network_from_plans
+from nnunetv2.utilities.helpers import dummy_context, empty_cache
 
 
 class LRMirrorTransform(MirrorTransform):
@@ -1152,12 +1156,146 @@ class nnUNetTrainer_LRMirror_TF3_abl_accum2_nodeepsuper(nnUNetTrainer_LRMirror_T
                  device: torch.device = torch.device('cuda')):
         super().__init__(plans, configuration, fold, dataset_json, device)
         self.enable_deep_supervision = False
+        self.num_epochs = 500
 
 class nnUNetTrainer_LRMirror_TF2_abl_accum2_nodeepsuper(nnUNetTrainer_LRMirror_TF2_abl_accum2):
     def __init__(self, plans: dict, configuration: str, fold: int, dataset_json: dict,
                  device: torch.device = torch.device('cuda')):
         super().__init__(plans, configuration, fold, dataset_json, device)
         self.enable_deep_supervision = False
+        self.num_epochs = 500
+
+
+class nnUNetTrainer_TF3_abl_accum2(nnUNetTrainer_TF3_Task1):
+    def __init__(self, plans: dict, configuration: str, fold: int, dataset_json: dict,
+                 device: torch.device = torch.device('cuda')):
+        super().__init__(plans, configuration, fold, dataset_json, device)
+        self.num_val_iterations_per_epoch = 10  # 50 # save some time
+        self.num_epochs = 300
+        self.accumulate_steps = 2
+        self.num_iterations_per_epoch = self.num_iterations_per_epoch * 2
+
+
+class nnUNetTrainer_TF3_primus(nnUNetTrainer_warmup): # see ../../primus for reference
+    def __init__(self, plans: dict, configuration: str, fold: int, dataset_json: dict,
+                 device: torch.device = torch.device('cuda')):
+        super().__init__(plans, configuration, fold, dataset_json, device)
+        self.num_val_iterations_per_epoch = 10  # 50 # save some time
+        self.num_epochs = 300
+        self.initial_lr = 3e-4
+        self.weight_decay = 5e-2
+        self.enable_deep_supervision = False
+
+    @staticmethod
+    def build_network_architecture(architecture_class_name: str,
+                                   arch_init_kwargs: dict,
+                                   arch_init_kwargs_req_import: Union[List[str], Tuple[str, ...]],
+                                   num_input_channels: int,
+                                   num_output_channels: int,
+                                   enable_deep_supervision: bool = True):
+        """
+        This is where you build the architecture according to the plans. There is no obligation to use
+        get_network_from_plans, this is just a utility we use for the nnU-Net default architectures. You can do what
+        you want. Even ignore the plans and just return something static (as long as it can process the requested
+        patch size)
+        but don't bug us with your bugs arising from fiddling with this :-P
+        This is the function that is called in inference as well! This is needed so that all network architecture
+        variants can be loaded at inference time (inference will use the same nnUNetTrainer that was used for
+        training, so if you change the network architecture during training by deriving a new trainer class then
+        inference will know about it).
+
+        If you need to know how many segmentation outputs your custom architecture needs to have, use the following snippet:
+        > label_manager = plans_manager.get_label_manager(dataset_json)
+        > label_manager.num_segmentation_heads
+        (why so complicated? -> We can have either classical training (classes) or regions. If we have regions,
+        the number of outputs is != the number of classes. Also there is the ignore label for which no output
+        should be generated. label_manager takes care of all that for you.)
+
+        """
+        return get_network_from_plans(
+            architecture_class_name,
+            arch_init_kwargs,
+            arch_init_kwargs_req_import,
+            num_input_channels,
+            num_output_channels,
+            allow_init=True,
+            deep_supervision=None)
+
+    def configure_optimizers(self, stage: str = "warmup_all"):
+        assert stage in ["warmup_all", "train"]
+
+        if self.training_stage == stage:
+            return self.optimizer, self.lr_scheduler
+
+        if isinstance(self.network, DDP):
+            params = self.network.module.parameters()
+        else:
+            params = self.network.parameters()
+
+        if stage == "warmup_all":
+            self.print_to_log_file("train whole net, warmup")
+            optimizer = torch.optim.AdamW(
+                params, self.initial_lr, weight_decay=self.weight_decay, amsgrad=False, betas=(0.9, 0.98), fused=True
+            )
+            lr_scheduler = Lin_incr_LRScheduler(optimizer, self.initial_lr, self.warmup_duration_whole_net)
+            self.print_to_log_file(f"Initialized warmup_all optimizer and lr_scheduler at epoch {self.current_epoch}")
+        else:
+            self.print_to_log_file("train whole net, default schedule")
+            if self.training_stage == "warmup_all":
+                # we can keep the existing optimizer and don't need to create a new one. This will allow us to keep
+                # the accumulated momentum terms which already point in a useful driection
+                optimizer = self.optimizer
+            else:
+                optimizer = torch.optim.AdamW(
+                    params,
+                    self.initial_lr,
+                    weight_decay=self.weight_decay,
+                    amsgrad=False,
+                    betas=(0.9, 0.98),
+                    fused=True,
+                )
+            lr_scheduler = PolyLRScheduler_offset(
+                optimizer, self.initial_lr, self.num_epochs, self.warmup_duration_whole_net
+            )
+            self.print_to_log_file(f"Initialized train optimizer and lr_scheduler at epoch {self.current_epoch}")
+        self.training_stage = stage
+        empty_cache(self.device)
+        return optimizer, lr_scheduler
+
+    def train_step(self, batch: dict, step_optimizer=True) -> dict:
+        data = batch["data"]
+        target = batch["target"]
+
+        data = data.to(self.device, non_blocking=True)
+        if isinstance(target, list):
+            target = [i.to(self.device, non_blocking=True) for i in target]
+        else:
+            target = target.to(self.device, non_blocking=True)
+
+        self.optimizer.zero_grad(set_to_none=True)
+        # Autocast can be annoying
+        # If the device_type is 'cpu' then it's slow as heck and needs to be disabled.
+        # If the device_type is 'mps' then it will complain that mps is not implemented, even if enabled=False is set. Whyyyyyyy. (this is why we don't make use of enabled=False)
+        # So autocast will only be active if we have a cuda device.
+        with autocast(self.device.type, enabled=True) if self.device.type == "cuda" else dummy_context():
+            output = self.network(data)
+            # del data
+            l = self.loss(output, target)
+
+        if self.grad_scaler is not None:
+            self.grad_scaler.scale(l).backward()
+            self.grad_scaler.unscale_(self.optimizer)
+            torch.nn.utils.clip_grad_norm_(self.network.parameters(), 1)
+            self.grad_scaler.step(self.optimizer)
+            self.grad_scaler.update()
+        else:
+            l.backward()
+            torch.nn.utils.clip_grad_norm_(self.network.parameters(), 1)
+            self.optimizer.step()
+        return {"loss": l.detach().cpu().numpy()}
+
+    def set_deep_supervision_enabled(self, enabled: bool):
+        pass
 
 
 if __name__ == "__main__":
