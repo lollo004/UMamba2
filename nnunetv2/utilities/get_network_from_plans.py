@@ -28,8 +28,11 @@ def get_network_from_plans(arch_class_name, arch_kwargs, arch_kwargs_req_import,
         else:
             raise ImportError('Network class could not be found, please check/correct your plans file')
 
-    if deep_supervision is not None and 'primus' not in arch_class_name.lower():
+    if deep_supervision is not None:
         architecture_kwargs['deep_supervision'] = deep_supervision
+    if 'deep_supervision' in architecture_kwargs and 'primus' in arch_class_name.lower():
+        print(f'removing deep_supervision: {architecture_kwargs["deep_supervision"]} for primus model')
+        del architecture_kwargs['deep_supervision']
 
     network = nw_class(
         input_channels=input_channels,
